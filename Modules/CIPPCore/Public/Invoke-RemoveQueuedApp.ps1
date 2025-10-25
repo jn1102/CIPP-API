@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-RemoveQueuedApp {
+function Invoke-RemoveQueuedApp {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -11,28 +11,27 @@ Function Invoke-RemoveQueuedApp {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    $User = $Request.Headers
-    Write-LogMessage -Headers $User -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-
-    $ID = $request.body.id
+    $ID = $request.body.ID
     try {
         $Table = Get-CippTable -tablename 'apps'
-        $Filter = "PartitionKey eq 'apps' and RowKey eq '$id'"
+        $Filter = "PartitionKey eq 'apps' and RowKey eq '$ID'"
         $ClearRow = Get-CIPPAzDataTableEntity @Table -Filter $Filter -Property PartitionKey, RowKey
-        Remove-AzDataTableEntity -Force @Table -Entity $clearRow
-        Write-LogMessage -Headers $User -API $APINAME -message "Removed application queue for $ID." -Sev 'Info'
-        $body = [pscustomobject]@{'Results' = 'Successfully removed from queue.' }
+        Remove-AzDataTableEntity -Force @Table -Entity $ClearRow
+        $Message = "Removed application queue for $ID."
+        Write-LogMessage -Headers $Request.Headers -API $APIName -message $Message -Sev 'Info'
+        $StatusCode = [HttpStatusCode]::OK
     } catch {
         $ErrorMessage = Get-CippException -Exception $_
-        Write-LogMessage -Headers $User -API $APINAME -message "Failed to remove application queue for $ID. $($ErrorMessage.NormalizedError)" -Sev 'Error' -LogData $ErrorMessage
-        $body = [pscustomobject]@{'Results' = "Failed to remove item. $(Get-NormalizedError -message $_.Exception.Message)" }
+        $Message = "Failed to remove application queue for $ID. $($ErrorMessage.NormalizedError)"
+        Write-LogMessage -Headers $Request.Headers -API $APIName -message $Message -Sev 'Error' -LogData $ErrorMessage
+        $StatusCode = [HttpStatusCode]::Forbidden
     }
 
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-            StatusCode = [HttpStatusCode]::OK
-            Body       = $body
-        })
+    $body = [pscustomobject]@{'Results' = $Message }
+    return [HttpResponseContext]@{
+        StatusCode = $StatusCode
+        Body       = $body
+    }
 
 
 }

@@ -1,9 +1,7 @@
-using namespace System.Net
-
 Function Invoke-AddIntuneTemplate {
     <#
     .FUNCTIONALITY
-        Entrypoint
+        Entrypoint,AnyTenant
     .ROLE
         Endpoint.MEM.ReadWrite
     #>
@@ -11,8 +9,6 @@ Function Invoke-AddIntuneTemplate {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-
     $GUID = (New-Guid).GUID
     try {
         if ($Request.Body.RawJSON) {
@@ -68,8 +64,7 @@ Function Invoke-AddIntuneTemplate {
     }
 
 
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::OK
             Body       = $body
         })
