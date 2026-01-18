@@ -1,5 +1,3 @@
-using namespace System.Net
-
 Function Invoke-ExecRunBackup {
     <#
     .FUNCTIONALITY
@@ -13,7 +11,7 @@ Function Invoke-ExecRunBackup {
     $APIName = $Request.Params.CIPPEndpoint
 
     try {
-        $CSVfile = New-CIPPBackup -BackupType 'CIPP' -Request $Request
+        $CSVfile = New-CIPPBackup -BackupType 'CIPP' -Headers $Request.Headers
         $body = [pscustomobject]@{
             'Results' = @{
                 resultText = 'Created backup'
@@ -35,8 +33,7 @@ Function Invoke-ExecRunBackup {
         } | ConvertTo-Json -Depth 5 -Compress
         Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Failed to create CIPP backup' -Sev 'Error' -LogData (Get-CippException -Exception $_)
     }
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::OK
             Body       = $body
         })
