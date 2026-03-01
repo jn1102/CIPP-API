@@ -1,6 +1,4 @@
-using namespace System.Net
-
-Function Invoke-ExecGetRecoveryKey {
+function Invoke-ExecGetRecoveryKey {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -11,28 +9,29 @@ Function Invoke-ExecGetRecoveryKey {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
 
-
-    # Write to the Azure Functions log stream.
-    Write-Host 'PowerShell HTTP trigger function processed a request.'
 
     # Interact with query parameters or the body of the request.
-    $TenantFilter = $Request.Query.TenantFilter
+    $TenantFilter = $Request.Query.tenantFilter ?? $Request.Body.tenantFilter
+    $GUID = $Request.Query.GUID ?? $Request.Body.GUID
+    $RecoveryKeyType = $Request.Body.RecoveryKeyType ?? 'BitLocker'
+
     try {
-        $GraphRequest = Get-CIPPBitlockerKey -device $Request.query.GUID -tenantFilter $TenantFilter -APIName $APINAME -Headers $Request.Headers
-        $Body = [pscustomobject]@{'Results' = $GraphRequest }
-
+        switch ($RecoveryKeyType) {
+            'BitLocker' { $Result = Get-CIPPBitLockerKey -Device $GUID -TenantFilter $TenantFilter -APIName $APIName -Headers $Headers }
+            'FileVault' { $Result = Get-CIPPFileVaultKey -Device $GUID -TenantFilter $TenantFilter -APIName $APIName -Headers $Headers }
+            default { throw "Invalid RecoveryKeyType specified: $RecoveryKeyType." }
+        }
+        $StatusCode = [HttpStatusCode]::OK
     } catch {
-        $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
-        $Body = [pscustomobject]@{'Results' = "Failed. $ErrorMessage" }
-
+        $Result = $_.Exception.Message
+        $StatusCode = [HttpStatusCode]::InternalServerError
     }
 
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-            StatusCode = [HttpStatusCode]::OK
-            Body       = $Body
+    return ([HttpResponseContext]@{
+            StatusCode = $StatusCode
+            Body       = @{Results = $Result }
         })
 
 }

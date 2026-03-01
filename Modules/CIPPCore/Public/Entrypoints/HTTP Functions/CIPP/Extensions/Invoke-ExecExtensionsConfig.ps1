@@ -1,6 +1,4 @@
-using namespace System.Net
-
-Function Invoke-ExecExtensionsConfig {
+function Invoke-ExecExtensionsConfig {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -9,11 +7,13 @@ Function Invoke-ExecExtensionsConfig {
     #>
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
+    $Headers = $Request.Headers
+
 
     $Body = [PSCustomObject]$Request.Body
-    $results = try {
+    $Results = try {
         # Check if NinjaOne URL is set correctly and the instance has at least version 5.6
-        if ($Body.NinjaOne) {
+        if ($Body.NinjaOne.Enabled -eq $true) {
             $AllowedNinjaHostnames = @(
                 'app.ninjarmm.com',
                 'eu.ninjarmm.com',
@@ -27,6 +27,14 @@ Function Invoke-ExecExtensionsConfig {
             }
         }
 
+        if ($Body.Hudu.NextSync) {
+            #parse unixtime for addedtext
+            $Timestamp = [datetime]::UnixEpoch.AddSeconds([int]$Body.Hudu.NextSync).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            Register-CIPPExtensionScheduledTasks -Reschedule -NextSync $Body.Hudu.NextSync -Extensions 'Hudu'
+            $AddedText = " Next sync will be at $Timestamp."
+            $Body.Hudu.NextSync = ''
+        }
+
         $Table = Get-CIPPTable -TableName Extensionsconfig
         foreach ($APIKey in $Body.PSObject.Properties.Name) {
             Write-Information "Working on $apikey"
@@ -34,7 +42,7 @@ Function Invoke-ExecExtensionsConfig {
                 Write-Information 'Not sending to keyvault. Key previously set or left blank.'
             } else {
                 Write-Information 'writing API Key to keyvault, and clearing.'
-                Write-Information "$ENV:WEBSITE_DEPLOYMENT_ID"
+                Write-Information "$env:WEBSITE_DEPLOYMENT_ID"
                 if ($Body.$APIKey.APIKey) {
                     Set-ExtensionAPIKey -Extension $APIKey -APIKey $Body.$APIKey.APIKey
                 }
@@ -59,7 +67,7 @@ Function Invoke-ExecExtensionsConfig {
         $AddObject = @{
             PartitionKey = 'InstanceProperties'
             RowKey       = 'CIPPURL'
-            Value        = [string]([System.Uri]$Request.Headers.'x-ms-original-url').Host
+            Value        = [string]([System.Uri]$Headers.'x-ms-original-url').Host
         }
         Write-Information ($AddObject | ConvertTo-Json -Compress)
         $ConfigTable = Get-CIPPTable -tablename 'Config'
@@ -72,12 +80,10 @@ Function Invoke-ExecExtensionsConfig {
     }
 
 
-    $body = [pscustomobject]@{'Results' = $Results }
 
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::OK
-            Body       = $body
+            Body       = @{'Results' = $Results }
         })
 
 }
